@@ -11,9 +11,9 @@ from unittest.mock import AsyncMock, patch
 from mcp.server.fastmcp import FastMCP
 
 from mcp_server.tools.core import _parse_show_version, _parse_show_switch, _parse_show_hosts
-from mcp_server.tools.ports import _parse_interface_counters, _parse_interface_detail
-from mcp_server.tools.vlan import _parse_switchport
-from mcp_server.tools.poe import _parse_show_power
+from mcp_server.tools.ports import _parse_interface_counters, _parse_interface_detail, _parse_interface_status
+from mcp_server.tools.vlan import _parse_switchport, _parse_vlan_table
+from mcp_server.tools.poe import _parse_show_poe
 from mcp_server.tools.spantree import _parse_spanning_tree
 from mcp_server.tools.routing import _parse_ip_route
 from mcp_server.tools.lldp import _parse_lldp_remote
@@ -72,6 +72,7 @@ def test_parse_show_version_full():
     assert data["model"] == "M4250-40G8XF-PoE+"
     assert data["serial_number"] == "ABC123456789"
     assert data["software_version"] == "14.0.1.6"
+    assert data["firmware_version"] == "14.0.1.6"
     assert data["uptime"] == "15 days 6 hrs 32 mins"
     assert data["mac_address"] == "AA:BB:CC:DD:EE:FF"
 
@@ -177,10 +178,10 @@ SHOW_INTERFACE_DETAIL_OUTPUT = (
     "Link Status.................. Up\n"
     "Speed........................ 1000 Mbps Full\n"
     "Duplex....................... Full\n"
-    "Total Packets Received....... 123456\n"
-    "Total Packets Transmitted.... 654321\n"
-    "Total Octets Received........ 12345678\n"
-    "Total Octets Transmitted..... 87654321\n"
+    "Total Packets Received Without Errors.. 123456\n"
+    "Total Packets Transmitted Successfully. 654321\n"
+    "Total Packets Received (Octets)........ 12345678\n"
+    "Total Packets Transmitted (Octets)..... 87654321\n"
     "Unicast Packets Received..... 100000\n"
     "Multicast Packets Received... 20000\n"
     "Broadcast Packets Received... 3456\n"
@@ -248,62 +249,39 @@ def test_parse_switchport_block_without_port():
     assert entries == []
 
 
-# ── _parse_show_power ──────────────────────────────────────────────────
+# ── _parse_show_poe ────────────────────────────────────────────────────
 
-SHOW_POWER_DOT_OUTPUT = (
-    "Unit : 1\n"
-    "Power Budget........................... 740.0 W\n"
-    "Power Consumption...................... 123.4 W\n"
-    "Power Remaining........................ 616.6 W\n"
-    "\n"
-    "Port       Admin Mode  Oper Status  Power(mW)  Class\n"
-    "---------- ----------- ------------ ---------- -----\n"
-    "0/1        Enable      Delivering   15400      3\n"
-    "0/2        Enable      Searching    0          n/a\n"
-)
-
-SHOW_POWER_TABULAR_OUTPUT = (
-    "Unit  Power Budget(W)  Power Consumption(W)  Power Remaining(W)\n"
-    "----  ---------------  --------------------  ------------------\n"
-    "1     1440.0           120.5                 1319.5\n"
+SHOW_POE_OUTPUT = (
+    "Unit........................................... 1\n"
+    "Slot........................................... 0\n"
+    "Model.......................................... M4300-28G-PoE+\n"
+    "Firmware Version............................... 4.1.0.12\n"
+    "PSE Main Operational Status.................... OFF\n"
+    "Total Power (Main AC).......................... 720.0 Watts\n"
+    "Power Source................................... Main AC\n"
+    "Total Power Consumed........................... 0.0 Watts\n"
+    "Power Management Mode.......................... Dynamic\n"
+    "Traps.......................................... Enable\n"
 )
 
 
-def test_parse_show_power_dot_format():
-    """Parse show power in dot-separated format (M4250)."""
-    data = _parse_show_power(SHOW_POWER_DOT_OUTPUT)
+def test_parse_show_poe_full():
+    """Parse show poe with all fields present."""
+    data = _parse_show_poe(SHOW_POE_OUTPUT)
     assert data["unit"] == "1"
-    assert data["power_budget_w"] == 740.0
-    assert data["power_consumption_w"] == 123.4
-    assert data["power_remaining_w"] == 616.6
+    assert data["slot"] == "0"
+    assert data["model"] == "M4300-28G-PoE+"
+    assert data["firmware_version"] == "4.1.0.12"
+    assert data["pse_status"] == "OFF"
+    assert data["total_power_w"] == 720.0
+    assert data["power_source"] == "Main AC"
+    assert data["power_consumed_w"] == 0.0
+    assert data["power_management_mode"] == "Dynamic"
 
 
-def test_parse_show_power_dot_format_per_port():
-    """Parse show power per-port table from dot format."""
-    data = _parse_show_power(SHOW_POWER_DOT_OUTPUT)
-    ports = data["ports"]
-    assert len(ports) == 2
-    assert ports[0]["port"] == "0/1"
-    assert ports[0]["admin_mode"] == "Enable"
-    assert ports[0]["oper_status"] == "Delivering"
-    assert ports[0]["power_mw"] == "15400"
-    assert ports[0]["class"] == "3"
-    assert ports[1]["port"] == "0/2"
-    assert ports[1]["oper_status"] == "Searching"
-
-
-def test_parse_show_power_tabular_format():
-    """Parse show power in tabular (fallback) format."""
-    data = _parse_show_power(SHOW_POWER_TABULAR_OUTPUT)
-    assert data["unit"] == "1"
-    assert data["power_budget_w"] == 1440.0
-    assert data["power_consumption_w"] == 120.5
-    assert data["power_remaining_w"] == 1319.5
-
-
-def test_parse_show_power_empty():
-    """Parse show power with empty input returns empty dict."""
-    assert _parse_show_power("") == {}
+def test_parse_show_poe_empty():
+    """Parse show poe with empty input returns empty dict."""
+    assert _parse_show_poe("") == {}
 
 
 # ── _parse_spanning_tree ───────────────────────────────────────────────
@@ -382,10 +360,11 @@ def test_parse_ip_route_empty():
 # ── _parse_lldp_remote ────────────────────────────────────────────────
 
 SHOW_LLDP_OUTPUT = (
-    "Local Interface  Remote ID  Chassis ID             Port ID    System Name\n"
-    "---------------- ---------- ---------------------- ---------- -----------\n"
-    "0/49             1          AA:BB:CC:DD:EE:01      0/1        Switch-2\n"
-    "0/50             2          AA:BB:CC:DD:EE:02      0/1\n"
+    "Local\n"
+    "Interface  RemID   Chassis ID            Port ID             System Name         OUI          OUI Subtype\n"
+    "--------- -------  --------------------  ------------------  ------------------  -----------  -----------\n"
+    "1/0/25     2       AA:BB:CC:DD:EE:01     port1               SWITCH-NEIGHBOR     0x00120f     0x03\n"
+    "1/0/26     1       AA:BB:CC:DD:EE:01     uplink              SWITCH-NEIGHBOR     0x00120f     0x03\n"
 )
 
 
@@ -393,17 +372,19 @@ def test_parse_lldp_remote_full():
     """Parse LLDP table with system_name present."""
     neighbors = _parse_lldp_remote(SHOW_LLDP_OUTPUT)
     assert len(neighbors) == 2
-    assert neighbors[0]["local_interface"] == "0/49"
-    assert neighbors[0]["remote_id"] == "1"
+    assert neighbors[0]["local_interface"] == "1/0/25"
+    assert neighbors[0]["remote_id"] == "2"
     assert neighbors[0]["chassis_id"] == "AA:BB:CC:DD:EE:01"
-    assert neighbors[0]["port_id"] == "0/1"
-    assert neighbors[0]["system_name"] == "Switch-2"
+    assert neighbors[0]["port_id"] == "port1"
+    assert neighbors[0]["system_name"] == "SWITCH-NEIGHBOR"
 
 
-def test_parse_lldp_remote_no_system_name():
-    """Parse LLDP entry without system_name field."""
+def test_parse_lldp_remote_second_entry():
+    """Parse LLDP second neighbor entry."""
     neighbors = _parse_lldp_remote(SHOW_LLDP_OUTPUT)
-    assert "system_name" not in neighbors[1]
+    assert neighbors[1]["local_interface"] == "1/0/26"
+    assert neighbors[1]["port_id"] == "uplink"
+    assert neighbors[1]["system_name"] == "SWITCH-NEIGHBOR"
 
 
 def test_parse_lldp_remote_empty():
@@ -506,56 +487,63 @@ async def test_show_interfaces_returns_json(mcp_instance):
 
 async def test_show_interface_port_returns_json(mcp_instance):
     """Tool returns detailed port stats as JSON."""
-    with patch("mcp_server.tools.ports.execute_command", new_callable=AsyncMock, return_value=SHOW_INTERFACE_DETAIL_OUTPUT):
-        result = await mcp_instance.call_tool("netgear_show_interface_port", {"host": "10.0.0.1", "port": "0/1"})
+    async def _side_effect(host: str, cmd: str) -> str:
+        if "interfaces status" in cmd:
+            return "1/0/1                                    Up    Auto    1000 Full    Copper    Inactive\n"
+        return SHOW_INTERFACE_DETAIL_OUTPUT
+
+    with patch("mcp_server.tools.ports.execute_command", new_callable=AsyncMock, side_effect=_side_effect):
+        result = await mcp_instance.call_tool("netgear_show_interface_port", {"host": "10.0.0.1", "port": "1/0/1"})
         data = json.loads(_text(result))
-        assert data["link_status"] == "Up"
+        assert data["link_state"] == "Up"
         assert data["total_packets_received"] == "123456"
 
 
 # ── netgear_show_vlan ─────────────────────────────────────────────────
 
 async def test_show_vlan_returns_json(mcp_instance):
-    """Tool returns VLAN switchport info as JSON list."""
-    with patch("mcp_server.tools.vlan.execute_command", new_callable=AsyncMock, return_value=SHOW_SWITCHPORT_OUTPUT):
+    """Tool returns VLAN table as JSON list when no port_id given."""
+    show_vlan_output = (
+        "VLAN ID VLAN Name                        VLAN Type\n"
+        "------- -------------------------------- -------------------\n"
+        "1       default                          Default\n"
+        "129     Production                       Static\n"
+    )
+    with patch("mcp_server.tools.vlan.execute_command", new_callable=AsyncMock, return_value=show_vlan_output):
         result = await mcp_instance.call_tool("netgear_show_vlan", {"host": "10.0.0.1"})
         data = json.loads(_text(result))
+        assert data["command"] == "show vlan"
         assert len(data["vlans"]) == 2
-        assert data["vlans"][0]["port"] == "0/1"
+        assert data["vlans"][0]["vlan_id"] == 1
+        assert data["vlans"][0]["name"] == "default"
+        assert data["vlans"][1]["name"] == "Production"
 
 
 async def test_show_vlan_with_port_id(mcp_instance):
     """Tool uses per-port command when port_id is given."""
     single_port_output = (
-        "Port: 0/5\n"
+        "Port: 1/0/5\n"
         "  VLAN Membership Mode.................. Access\n"
         "  Access Mode VLAN...................... 200\n"
     )
     with patch("mcp_server.tools.vlan.execute_command", new_callable=AsyncMock, return_value=single_port_output) as mock_exec:
-        result = await mcp_instance.call_tool("netgear_show_vlan", {"host": "10.0.0.1", "port_id": "0/5"})
+        result = await mcp_instance.call_tool("netgear_show_vlan", {"host": "10.0.0.1", "port_id": "1/0/5"})
         data = json.loads(_text(result))
-        assert data["vlans"][0]["access_vlan"] == "200"
-        mock_exec.assert_called_once_with("10.0.0.1", "show interfaces switchport 0/5")
+        assert data["ports"][0]["access_vlan"] == "200"
+        mock_exec.assert_called_once_with("10.0.0.1", "show interfaces switchport 1/0/5")
 
 
 # ── netgear_show_poe ──────────────────────────────────────────────────
 
-async def test_show_poe_returns_json_dot(mcp_instance):
-    """Tool returns PoE data from dot-separated format."""
-    with patch("mcp_server.tools.poe.execute_command", new_callable=AsyncMock, return_value=SHOW_POWER_DOT_OUTPUT):
+async def test_show_poe_returns_json(mcp_instance):
+    """Tool returns PoE data from show poe format."""
+    with patch("mcp_server.tools.poe.execute_command", new_callable=AsyncMock, return_value=SHOW_POE_OUTPUT):
         result = await mcp_instance.call_tool("netgear_show_poe", {"host": "10.0.0.1"})
         data = json.loads(_text(result))
-        assert data["power_budget_w"] == 740.0
-        assert len(data["ports"]) == 2
-
-
-async def test_show_poe_tabular_format(mcp_instance):
-    """Tool returns PoE data from tabular format."""
-    with patch("mcp_server.tools.poe.execute_command", new_callable=AsyncMock, return_value=SHOW_POWER_TABULAR_OUTPUT):
-        result = await mcp_instance.call_tool("netgear_show_poe", {"host": "10.0.0.1"})
-        data = json.loads(_text(result))
-        assert data["power_budget_w"] == 1440.0
-        assert data["power_consumption_w"] == 120.5
+        assert data["command"] == "show poe"
+        assert data["total_power_w"] == 720.0
+        assert data["pse_status"] == "OFF"
+        assert data["model"] == "M4300-28G-PoE+"
 
 
 # ── netgear_show_spanning_tree ─────────────────────────────────────────
@@ -588,7 +576,7 @@ async def test_show_lldp_returns_json(mcp_instance):
         result = await mcp_instance.call_tool("netgear_show_lldp", {"host": "10.0.0.1"})
         data = json.loads(_text(result))
         assert len(data["neighbors"]) == 2
-        assert data["neighbors"][0]["system_name"] == "Switch-2"
+        assert data["neighbors"][0]["system_name"] == "SWITCH-NEIGHBOR"
 
 
 # ── netgear_cli_readonly ──────────────────────────────────────────────

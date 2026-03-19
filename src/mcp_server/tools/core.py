@@ -49,6 +49,9 @@ def _parse_show_version(output: str) -> dict:
         if m:
             data[key] = m.group(1).strip()
 
+    if "software_version" in data:
+        data["firmware_version"] = data["software_version"]
+
     return data
 
 
@@ -89,10 +92,25 @@ def _parse_show_hosts(output: str) -> dict:
         if m:
             data[key] = m.group(1).strip()
 
-    # Collect name servers (may span multiple lines)
-    servers: list[str] = []
-    for m in re.finditer(r"Name\s+server[.\s]+([\d.]+)", output, re.IGNORECASE):
-        servers.append(m.group(1).strip())
+    # Clean dns_client_ipv4 — strip trailing [Up]/[Down]
+    if "dns_client_ipv4" in data:
+        data["dns_client_ipv4"] = re.sub(r"\s*\[.*?\]\s*$", "", data["dns_client_ipv4"]).strip()
+
+    # Collect name servers — two formats:
+    # 1. Multi-line:  "Name server.. IP" repeated (word boundary excludes "servers")
+    # 2. Single line: "Name servers (Preference order).... IP, IP"
+    multi_ns = re.findall(
+        r"Name\s+server\b[.\s]+(\d[\d.]+)", output, re.IGNORECASE,
+    )
+    m_ns = re.search(
+        r"Name\s+servers?\s*(?:\([^)]*\))?[.\s]+(\d[\d.,\s]+)",
+        output, re.IGNORECASE,
+    )
+    comma_ns: list[str] = []
+    if m_ns:
+        raw_ns = m_ns.group(1).strip().rstrip(",")
+        comma_ns = [s.strip() for s in raw_ns.split(",") if s.strip()]
+    servers = multi_ns if len(multi_ns) >= len(comma_ns) else comma_ns
     if servers:
         data["name_servers"] = ", ".join(servers)
 

@@ -24,79 +24,34 @@ logger = logging.getLogger(__name__)
 # Parser
 # ---------------------------------------------------------------------------
 
-def _parse_show_power(output: str) -> dict:
-    """Parse ``show power`` output.
-
-    Supports two NETGEAR output formats:
-
-    **Dot-separated** (most common on M4250/M4350)::
-
-        Power Budget........................... 740.0 W
-        Power Consumption...................... 123.4 W
-        Power Remaining........................ 616.6 W
-
-    **Tabular** (found on some firmware)::
-
-        Unit  Power Budget(W)  Power Consumption(W)  Power Remaining(W)
-        ----  ---------------  --------------------  ------------------
-        1     1440.0           120.5                 1319.5
-    """
+def _parse_show_poe(output: str) -> dict:
+    """Parse ``show poe`` output (dot-separated key-value format)."""
     data: dict[str, object] = {}
 
-    # Format 1: dot-separated labels (e.g. "Power Budget........ 740.0 W")
-    _DOT_FIELDS: list[tuple[str, str]] = [
-        (r"Power\s+Budget", "power_budget_w"),
-        (r"Power\s+Consumption", "power_consumption_w"),
-        (r"Power\s+Remaining", "power_remaining_w"),
+    patterns: list[tuple[str, str]] = [
+        (r"Unit[.\s]+(.*)", "unit"),
+        (r"Slot[.\s]+(.*)", "slot"),
+        (r"Model[.\s]+(\S+.*)", "model"),
+        (r"Firmware\s+Version[.\s]+(.*)", "firmware_version"),
+        (r"PSE\s+Main\s+Operational\s+Status[.\s]+(.*)", "pse_status"),
+        (r"Total\s+Power\s+\(Main\s+AC\)[.\s]+([\d.]+)", "total_power_w"),
+        (r"Power\s+Source[.\s]+(.*)", "power_source"),
+        (r"Total\s+Power\s+Consumed[.\s]+([\d.]+)", "power_consumed_w"),
+        (r"Power\s+Management\s+Mode[.\s]+(.*)", "power_management_mode"),
     ]
-    for pattern, key in _DOT_FIELDS:
-        m = re.search(rf"{pattern}[\.\s]+([\d.]+)", output, re.IGNORECASE)
+
+    for pat, key in patterns:
+        m = re.search(pat, output, re.IGNORECASE)
         if m:
-            data[key] = float(m.group(1))
-
-    # Unit line
-    m_unit = re.search(r"Unit\s*[:\s]+\s*(\d+)", output, re.IGNORECASE)
-    if m_unit:
-        data["unit"] = m_unit.group(1)
-
-    # Format 2: tabular (fallback if dot-format didn't match any field)
-    if not any(k in data for k in ("power_budget_w", "power_consumption_w")):
-        m_tab = re.search(
-            r"(\d+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)",
-            output,
-        )
-        if m_tab:
-            data["unit"] = m_tab.group(1)
-            data["power_budget_w"] = float(m_tab.group(2))
-            data["power_consumption_w"] = float(m_tab.group(3))
-            data["power_remaining_w"] = float(m_tab.group(4))
-
-    # Per-port table
-    ports: list[dict] = []
-    lines = output.splitlines()
-    in_port_table = False
-    for line in lines:
-        if re.search(r"Port\s+Admin\s*Mode|Intf\s+Admin\s*Mode", line, re.IGNORECASE):
-            in_port_table = True
-            continue
-        if in_port_table:
-            stripped = line.strip()
-            if not stripped or stripped.startswith("-"):
-                continue
-            tokens = stripped.split()
-            if len(tokens) >= 4:
-                port_entry: dict[str, str] = {
-                    "port": tokens[0],
-                    "admin_mode": tokens[1],
-                    "oper_status": tokens[2],
-                    "power_mw": tokens[3],
-                }
-                if len(tokens) >= 5:
-                    port_entry["class"] = tokens[4]
-                ports.append(port_entry)
-
-    if ports:
-        data["ports"] = ports
+            val = m.group(1).strip()
+            # Convert numeric values
+            if key in ("total_power_w", "power_consumed_w"):
+                try:
+                    data[key] = float(val)
+                except ValueError:
+                    data[key] = val
+            else:
+                data[key] = val
 
     return data
 
@@ -116,14 +71,14 @@ def register_tools(mcp: FastMCP) -> None:
     async def netgear_show_poe(host: str) -> str:
         """Return Power-over-Ethernet status for a NETGEAR switch.
 
-        Runs ``show power`` and returns power budget, consumption, remaining
-        wattage, and per-port PoE status.
+        Runs ``show poe`` and returns PoE operational status, total power,
+        and power consumed.
 
         Args:
             host: IP address of the target NETGEAR switch.
         """
-        output = await execute_command(host, "show power")
+        output = await execute_command(host, "show poe")
         if output.startswith("ERROR:"):
             return output
-        data = _parse_show_power(output)
-        return json.dumps({"host": host, "command": "show power", **data}, indent=2)
+        data = _parse_show_poe(output)
+        return json.dumps({"host": host, "command": "show poe", **data}, indent=2)

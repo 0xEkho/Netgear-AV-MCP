@@ -33,7 +33,7 @@ def _get_zone(host: str) -> int | None:
     ``10``.
 
     Args:
-        host: IPv4 address string (e.g. ``"10.9.139.1"``).
+        host: IPv4 address string (e.g. ``"10.9.0.1"``).
 
     Returns:
         The second octet as an integer, or ``None`` if *host* is not in the

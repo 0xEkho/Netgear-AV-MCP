@@ -8,9 +8,9 @@ class TestGetZone:
     """Tests for _get_zone() function."""
 
     def test_zone_detection_10_9_x_x(self):
-        """10.9.139.1 → zone 9"""
+        """10.9.0.1 → zone 9"""
         from mcp_server.ssh.auth import _get_zone
-        assert _get_zone("10.9.139.1") == 9
+        assert _get_zone("10.9.0.1") == 9
 
     def test_zone_detection_10_1_x_x(self):
         """10.1.0.1 → zone 1"""
@@ -56,7 +56,7 @@ class TestGetCredentials:
             "NETGEAR_ZONE9_USERNAME": "zone9user",
             "NETGEAR_ZONE9_PASSWORD": "zone9pass",
         }, clear=False):
-            user, pwd = get_credentials("10.9.139.1")
+            user, pwd = get_credentials("10.9.0.1")
             assert user == "zone9user"
             assert pwd == "zone9pass"
 

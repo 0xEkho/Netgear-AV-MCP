@@ -37,7 +37,7 @@ def _parse_ip_route(output: str) -> dict:
     data: dict[str, object] = {}
 
     # Default gateway
-    m = re.search(r"Default\s+Gateway[:\s.]+([\d.]+)", output, re.IGNORECASE)
+    m = re.search(r"Default\s+Gateway\(?s?\)?[:\s.]+([\d.]+)", output, re.IGNORECASE)
     if m:
         data["default_gateway"] = m.group(1).strip()
 

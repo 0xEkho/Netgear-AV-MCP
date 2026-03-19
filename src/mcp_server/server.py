@@ -39,7 +39,7 @@ logger = logging.getLogger(__name__)
 mcp = FastMCP(
     os.getenv("MCP_SERVER_NAME", "netgear-av-mcp"),
     host=os.getenv("MCP_HOST", "0.0.0.0"),  # noqa: S104
-    port=int(os.getenv("MCP_PORT", "8080")),
+    port=int(os.getenv("MCP_PORT", "8082")),
 )
 
 

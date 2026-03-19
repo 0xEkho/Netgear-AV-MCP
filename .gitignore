@@ -61,3 +61,9 @@ coverage.xml
 known_hosts
 *.tmp
 /tmp_ssh_*
+
+# Debug/test scripts at root
+/test_functional.py
+/compare_outputs.py
+/debug_*.py
+/test_tools_live.py

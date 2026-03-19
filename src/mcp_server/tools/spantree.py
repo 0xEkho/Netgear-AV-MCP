@@ -41,7 +41,7 @@ def _parse_spanning_tree(output: str) -> dict:
         "bridge_priority": r"Bridge\s+Priority[.\s]+(.*)",
         "bridge_id": r"Bridge\s+Identifier[.\s]+(.*)",
         "root_bridge_id": r"Designated\s+Root[.\s]+(.*)",
-        "root_port": r"Root\s+Port[.\s]+(.*)",
+        "root_port": r"Root\s+Port\s*(?:Identifier)?[.\s]+(\S+)",
         "time_since_topology_change": r"Time\s+Since\s+Topology\s+Change[.\s]+(.*)",
     }
     for key, pat in patterns.items():

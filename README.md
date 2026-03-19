@@ -37,19 +37,19 @@ An MCP (Model Context Protocol) server that exposes NETGEAR M4250/M4300/M4350 Pr
 | Tool | CLI Command | Description |
 |------|-------------|-------------|
 | `netgear_show_interfaces` | `show interface counters` | All ports traffic counters |
-| `netgear_show_interface_port` | `show interface ethernet <port>` | Detailed single port statistics |
+| `netgear_show_interface_port` | `show interfaces status <port>` + `show interface ethernet <port>` | Detailed single port statistics (port format: `1/0/X`) |
 
 ### VLAN
 
 | Tool | CLI Command | Description |
 |------|-------------|-------------|
-| `netgear_show_vlan` | `show interfaces switchport` | VLAN configuration per port |
+| `netgear_show_vlan` | `show vlan` / `show interfaces switchport <port>` | All VLANs or per-port switchport config |
 
 ### PoE
 
 | Tool | CLI Command | Description |
 |------|-------------|-------------|
-| `netgear_show_poe` | `show power` | PoE power budget, consumption, per-port status |
+| `netgear_show_poe` | `show poe` | PoE power budget, consumption, per-port status |
 
 ### Spanning Tree
 
@@ -95,7 +95,7 @@ cp .env.example .env
 uv run mcp-server
 ```
 
-The server starts on `http://0.0.0.0:8080` (Streamable HTTP transport).
+The server starts on `http://0.0.0.0:8082` (Streamable HTTP transport).
 
 ### 🐳 Docker (Production)
 
@@ -116,7 +116,7 @@ Copy `.env.example` to `.env` and adjust values. Never commit `.env` to version 
 | `MCP_SERVER_NAME` | `netgear-av-mcp` | Display name |
 | `MCP_TRANSPORT` | `streamable-http` | Transport: `streamable-http`, `sse`, or `stdio` |
 | `MCP_HOST` | `0.0.0.0` | Bind address |
-| `MCP_PORT` | `8080` | Listening port |
+| `MCP_PORT` | `8082` | Listening port |
 
 ### Security
 
@@ -175,7 +175,7 @@ Netgear-AV-MCP/
 
 1. Start with `MCP_TRANSPORT=streamable-http` (default)
 2. In OpenWebUI → Settings → Tools → Add Tool Server:
-   - URL: `http://<server-ip>:8080/mcp`
+   - URL: `http://<server-ip>:8082/mcp`
    - Auth: `Authorization: Bearer <MCP_API_KEY>`
 3. Tools appear automatically
 
