@@ -1,0 +1,63 @@
+[project]
+name = "netgear-av-mcp"
+version = "1.0.0"
+description = "MCP server for NETGEAR M4250/M4300/M4350 Pro AV network switches"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+keywords = ["mcp", "model-context-protocol", "netgear", "av", "m4250", "m4350", "network", "ssh"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: System Administrators",
+    "Intended Audience :: Telecommunications Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Networking",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "mcp>=1.2.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "asyncssh>=2.14.0",
+    "starlette>=0.40.0",
+    "uvicorn>=0.30.0",
+    "anyio>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/0xEkho/Netgear-AV-MCP"
+"Bug Tracker" = "https://github.com/0xEkho/Netgear-AV-MCP/issues"
+
+[project.scripts]
+mcp-server = "mcp_server.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/mcp_server"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.0.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--tb=short"
+
+[tool.coverage.run]
+source = ["src/mcp_server"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false

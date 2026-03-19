@@ -1,0 +1,12 @@
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "${MCP_PORT:-8080}:8080"
+    env_file: .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/mcp')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,63 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# uv
+.uv/
+# Note: uv.lock should be committed for applications (reproducible installs)
+# Only ignore it for libraries. Remove this line if this is an application:
+# uv.lock
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+*.log
+coverage.xml
+.mypy_cache/
+.ruff_cache/
+
+# MCP Inspector
+.mcp-inspector/
+
+# SSH
+known_hosts
+*.tmp
+/tmp_ssh_*
