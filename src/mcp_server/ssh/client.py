@@ -56,6 +56,8 @@ _PAGER_RE = re.compile(
 
 # NETGEAR prompt: "(DeviceName) #" or "(DeviceName) >" or just "# " / "> "
 _PROMPT_RE = re.compile(r"(?:\(.+?\)\s*[#>]|^[A-Za-z0-9_-]+\s*[#>])\s*$", re.MULTILINE)
+_ENABLE_PROMPT_RE = re.compile(r"\)\s*#\s*$", re.MULTILINE)
+_USER_PROMPT_RE = re.compile(r"\)\s*>\s*$", re.MULTILINE)
 
 
 def _strip_ansi(text: str) -> str:
@@ -85,7 +87,11 @@ async def _read_until_prompt(
     process: asyncssh.SSHClientProcess,
     timeout: int,
 ) -> str:
-    """Read from the process stdout until a NETGEAR prompt is detected."""
+    """Read from the process stdout until a NETGEAR prompt is detected.
+
+    Automatically handles pager prompts (``--More--``) by sending a space
+    to continue scrolling.
+    """
     buf = ""
     deadline = asyncio.get_event_loop().time() + timeout
     while True:
@@ -110,8 +116,13 @@ async def _read_until_prompt(
 
         buf += chunk
 
-        # Check for prompt in cleaned buffer
+        # Handle pager: send space to continue
         cleaned = _strip_ansi(buf)
+        if _PAGER_RE.search(cleaned):
+            process.stdin.write(" ")
+            continue
+
+        # Check for prompt in cleaned buffer
         if _PROMPT_RE.search(cleaned):
             break
 
@@ -162,7 +173,19 @@ async def execute_command(host: str, command: str) -> str:
             )
 
             # Wait for initial prompt
-            await _read_until_prompt(process, timeout=_CONNECT_TIMEOUT)
+            initial = await _read_until_prompt(process, timeout=_CONNECT_TIMEOUT)
+
+            # Enter enable mode if we landed in user mode (prompt ends with >)
+            cleaned_initial = _strip_ansi(initial)
+            if _USER_PROMPT_RE.search(cleaned_initial) and not _ENABLE_PROMPT_RE.search(cleaned_initial):
+                logger.debug("User mode detected on %s, sending 'enable'", host)
+                process.stdin.write("enable\n")
+                enable_resp = await _read_until_prompt(process, timeout=5)
+                cleaned_enable = _strip_ansi(enable_resp)
+                # Handle enable password prompt
+                if "assword" in cleaned_enable:
+                    process.stdin.write(password + "\n")
+                    await _read_until_prompt(process, timeout=5)
 
             # Disable paging
             process.stdin.write("terminal length 0\n")
